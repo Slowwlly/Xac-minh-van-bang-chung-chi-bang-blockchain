@@ -1,0 +1,205 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác minh văn bằng Blockchain</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f5f9;
+            margin: 0;
+            padding: 30px 16px;
+            color: #202938;
+        }
+
+        .container {
+            max-width: 760px;
+            margin: 0 auto;
+            background: white;
+            padding: 28px;
+            border-radius: 14px;
+            box-shadow: 0 5px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #183153;
+        }
+
+        .description {
+            color: #64748b;
+            line-height: 1.6;
+        }
+
+        form {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+
+        input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: 0;
+            border-radius: 7px;
+            background: #1d4ed8;
+            color: white;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        #result {
+            margin-top: 24px;
+            padding: 18px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow-wrap: anywhere;
+            line-height: 1.7;
+        }
+
+        .status {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .valid {
+            color: #15803d;
+        }
+
+        .invalid {
+            color: #b91c1c;
+        }
+
+        .unknown {
+            color: #92400e;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <h1>Xác minh văn bằng Blockchain</h1>
+
+        <p class="description">
+            Hệ thống demo kiểm tra dữ liệu chứng chỉ,
+            mã băm và trạng thái ghi nhận trên Blockchain local.
+        </p>
+
+        <form id="verifyForm">
+            <input
+                id="certificateId"
+                type="text"
+                placeholder="Ví dụ: CERT-2026-0001"
+                required
+            >
+            <button id="verifyButton" type="submit">
+                Xác minh
+            </button>
+        </form>
+
+        <section id="result" aria-live="polite">
+            Nhập mã chứng chỉ để bắt đầu xác minh.
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById("verifyForm");
+        const input = document.getElementById("certificateId");
+        const result = document.getElementById("result");
+        const button = document.getElementById("verifyButton");
+
+        async function verifyCertificate(id) {
+            result.textContent = "Đang truy vấn Blockchain...";
+            button.disabled = true;
+
+            try {
+                const response = await fetch(
+                    "/api/verify/" + encodeURIComponent(id)
+                );
+
+                const data = await response.json();
+
+                result.replaceChildren();
+
+                const heading = document.createElement("div");
+                heading.className = "status";
+
+                if (data.status === "VALID") {
+                    heading.classList.add("valid");
+                    heading.textContent = "CHỨNG CHỈ HỢP LỆ";
+                } else if (
+                    data.status === "REVOKED" ||
+                    data.status === "HASH_MISMATCH" ||
+                    data.status === "NOT_FOUND"
+                ) {
+                    heading.classList.add("invalid");
+                    heading.textContent = data.status;
+                } else {
+                    heading.classList.add("unknown");
+                    heading.textContent = data.status || "UNKNOWN";
+                }
+
+                result.appendChild(heading);
+
+                const details = document.createElement("pre");
+                details.textContent = JSON.stringify(data, null, 2);
+                result.appendChild(details);
+            } catch (error) {
+                result.textContent =
+                    "Không kết nối được máy chủ. Kiểm tra node Blockchain và server.js.";
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+
+            const id = input.value.trim();
+
+            if (id) {
+                verifyCertificate(id);
+            }
+        });
+
+        // Tu dong dien ma chung chi khi truy cap tu QR
+        const match = window.location.pathname.match(/^\/verify\/([^/]+)$/);
+
+        if (match) {
+            input.value = decodeURIComponent(match[1]);
+            verifyCertificate(input.value);
+        } else {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get("id");
+
+            if (id) {
+                input.value = id;
+                verifyCertificate(id);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+.env
+node_modules/
+artifacts/
+cache/
+deployed-address.json
+ipfs-cid.json
