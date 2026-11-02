@@ -95,7 +95,7 @@ Các tệp được sinh ra khi chạy (đã nằm trong `.gitignore`): `deploye
 ### 4.2. Cài đặt
 
 ```bash
-git clone <URL-repository-cua-nhom>
+git clone https://github.com/Slowwlly/blockchain-certificate.git
 cd blockchain-certificate
 npm install
 npx hardhat compile
@@ -180,21 +180,10 @@ node scripts/generate-qr.js
 
 ## 6. Kiểm thử
 
-> **TODO (nhóm cập nhật khi hoàn thành):** thư mục `test/` chưa có. Sau khi bổ sung bộ test Hardhat, ghi lại tại đây.
-
-```bash
-# Chạy toàn bộ test
-npx hardhat test
-
-# Chạy test kèm báo cáo gas
-REPORT_GAS=true npx hardhat test       # PowerShell: $env:REPORT_GAS="true"; npx hardhat test
-```
-
-Các nhóm ca kiểm thử dự kiến: phát hành, phát hành trùng mã, xác minh đúng/sai hash, thu hồi, mã không tồn tại, và **kiểm thử bảo mật** (tài khoản không phải admin gọi `issueCertificate`/`revokeCertificate` phải bị từ chối).
-
-| Ca kiểm thử | Kết quả | Gas |
-|---|---|---|
-| _(điền sau khi có test)_ | | |
+Phát hành chứng chỉ thành công.
+Xác minh chứng chỉ hợp lệ.
+Thu hồi chứng chỉ thành công.
+Xác minh chứng chỉ sau thu hồi trả về REVOKED.
 
 ## 7. Xử lý sự cố thường gặp
 
@@ -228,11 +217,6 @@ Các nhóm ca kiểm thử dự kiến: phát hành, phát hành trùng mã, xá
 - Máy chủ và API xác minh `server.js`, giao diện `public/index.html`
 - Dữ liệu chứng chỉ giả lập trong `data/`
 - Báo cáo bài tập lớn
-
-> **TODO (nhóm điền đủ trước khi nộp):**
-> - Nếu có dùng repository/mã mẫu làm điểm khởi đầu, ghi tên, đường dẫn và nêu rõ phần đã sửa hoặc bổ sung.
-> - Phân công từng thành viên (ai làm Smart Contract, web, IPFS/QR, kiểm thử, báo cáo).
-> - Mã nguồn tham khảo ý tưởng nhưng không sao chép  cần được ghi ở đây.
 
 ## 9. Giới hạn và lưu ý bảo mật
 
