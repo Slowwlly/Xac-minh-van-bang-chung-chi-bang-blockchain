@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Xác minh văn bằng/chứng chỉ đại học bằng Blockchain
 
 Nguyên mẫu (prototype) xác minh văn bằng/chứng chỉ bằng Smart Contract trên mạng Blockchain cục bộ (Hardhat).
@@ -333,3 +334,6 @@ blockchain-certificate/
 - Chạy trên Hardhat local node; có thể chuyển sang testnet (Sepolia) bằng cách sửa `RPC_URL` và `ADMIN_PRIVATE_KEY`.
 - Dữ liệu off-chain lưu file JSON trên server; production nên dùng database hoặc hoàn toàn IPFS.
 >>>>>>> 0b6c43d (Cập nhật hoàn chỉnh: giao diện quản trị, QR tự động IP, test bảo mật, tài liệu báo cáo)
+=======
+# Xac-minh-van-bang-chung-chi-bang-blockchain
+>>>>>>> 906c4ab6cd04fde3d0c730cb15547db49dfee73c
