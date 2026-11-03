@@ -1,339 +1,239 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-# Xác minh văn bằng/chứng chỉ đại học bằng Blockchain
+# Hệ thống Xác minh Chứng chỉ Blockchain (Đề tài #17)
 
-Nguyên mẫu (prototype) xác minh văn bằng/chứng chỉ bằng Smart Contract trên mạng Blockchain cục bộ (Hardhat).
-Hệ thống chỉ ghi **bằng chứng tối thiểu** (mã chứng chỉ, mã băm SHA-256, CID IPFS, địa chỉ phát hành, thời điểm, trạng thái thu hồi) lên chuỗi; nội dung chứng chỉ được lưu ngoài chuỗi.
+Demo ứng dụng quản lý và xác minh văn bằng/chứng chỉ đại học bằng Blockchain (Ethereum + Hardhat + IPFS). Hệ thống chỉ ghi **bằng chứng tối thiểu** lên chuỗi; nội dung chi tiết được lưu ngoài chuỗi, không đưa thông tin cá nhân lên blockchain.
 
 - **Học phần:** Công nghệ Blockchain, Khoa Công nghệ thông tin, Trường Đại học Hải Phòng
 - **Nhóm thực hiện:** Phạm Văn Dương, Nguyễn Trung Đức, Nguyễn Văn Mạnh (lớp CNTT.1 - K25)
 - **Giảng viên hướng dẫn:** PGS.TS Lê Đắc Nhường
 
-> **Lưu ý:** đây là sản phẩm học tập chạy trên mạng cục bộ, dùng dữ liệu giả lập. Đây không phải dịch vụ chính thức của nhà trường và chưa được kiểm toán bảo mật.
+> 
+> ⚠️ **Lưu ý:** đây là sản phẩm học tập chạy trên mạng cục bộ, dùng dữ liệu giả lập. Không phải dịch vụ chính thức và chưa được kiểm toán bảo mật.
 
 ---
 
-## 1. Chức năng
+## 1. Chức năng chính
 
-| Chức năng | Thành phần | Ghi chú |
-|---|---|---|
-| Triển khai Smart Contract | `scripts/deploy.js` | Ghi địa chỉ hợp đồng vào `deployed-address.json` |
-| Tạo mã băm SHA-256 | `scripts/create-hash.js` | Băm `JSON.stringify` của dữ liệu chứng chỉ |
-| Lưu dữ liệu lên IPFS | `scripts/upload-ipfs.js` | Qua Pinata, ghi CID vào `ipfs-cid.json` |
-| Phát hành chứng chỉ | `scripts/issue.js` | Gọi `issueCertificate()`; chỉ admin được gọi |
-| Thu hồi chứng chỉ | `scripts/revoke.js` | Gọi `revokeCertificate()`; chỉ admin được gọi |
-| Tạo mã QR | `scripts/generate-qr.js` | QR chứa URL `/verify/<mã chứng chỉ>` |
-| Tra cứu và xác minh | `server.js`, `public/index.html` | Website và API, người xác minh không cần ví |
+Bảng
+
+| Chức năng | Mô tả | Quyền |
+| --- | --- | --- |
+| **Phát hành chứng chỉ** | Nhập thông tin → tự tính SHA-256, upload IPFS (Pinata), ghi bản ghi lên blockchain | Admin (cần mật khẩu) |
+| **Thu hồi chứng chỉ** | Đánh dấu trạng thái thu hồi trên chuỗi (không thể hoàn tác) | Admin (cần mật khẩu) |
+| **Tạo mã QR** | Tạo QR trỏ đến trang xác minh, có thể tải về dưới dạng PNG | Công khai |
+| **Xác minh / Tra cứu** | Kiểm tra hash + trạng thái on-chain, đối chiếu dữ liệu, công khai không cần đăng nhập | Công khai |
+
+**Nguyên tắc dữ liệu:**
+
+- ✅ **On-chain**: mã chứng chỉ, hash SHA-256, CID IPFS, địa chỉ người phát hành, thời gian, trạng thái thu hồi
+- ✅ **Off-chain**: nội dung chi tiết chứng chỉ (`data/certificates/*.json` + IPFS)
+- ✅ **Không lưu** thông tin cá nhân (họ tên, mã SV...) lên chuỗi
+
+---
 
 ## 2. Kiến trúc tổng quan
 
 ```
- Người vận hành (Issuer/Admin)                    Bên xác minh (Verifier)
-   |  scripts: deploy / issue / revoke                 |  trình duyệt / quét QR
-   |  upload-ipfs / create-hash / generate-qr          v
-   v                                          +-------------------+
-+------------------+    giao dịch (ethers)    |  server.js        |
-| Hardhat node     |<-------------------------|  (Express, :3000) |
-| (mạng cục bộ)    |   getCertificate() (đọc) |  public/index.html|
-|  CertificateRegistry.sol                    +---------+---------+
-+------------------+                                    |
-                                                        | đọc data/certificates/<id>.json
- Pinata (IPFS): lưu JSON, trả CID                       | tính lại SHA-256, so với hash on-chain
+ Người vận hành (Admin)                     Bên xác minh (Công chúng)
+   | Phát hành / Thu hồi (giao dịch)              | Quét QR / Truy cập web
+   v                                              v
++-------------------+                    +-------------------+
+|  Hardhat Node     |<-------------------|   server.js       |
+|  Smart Contract   |  Đọc/Ghi giao dịch  |   (Express:3000) |
++-------------------+                    +---------+---------+
+        ^                                            |
+        | Dữ liệu băm + CID                          | Đọc file JSON + tính lại hash
+   +----+----+                                       v
+   | Pinata  |                                Trả về trạng thái:
+   | (IPFS)  |                                VALID / REVOKED / HASH_MISMATCH
+   +---------+
 ```
-
-### Dữ liệu on-chain và off-chain
-
-| Dữ liệu | Nơi lưu |
-|---|---|
-| Mã chứng chỉ, hash SHA-256, CID IPFS, địa chỉ issuer, thời điểm phát hành, trạng thái thu hồi | **On-chain** (Smart Contract) |
-| Nội dung chứng chỉ (loại bằng, ngành, đơn vị cấp, ngày cấp) | **Off-chain**: `data/certificates/*.json`, IPFS |
-| Thông tin cá nhân thật (họ tên, ngày sinh, mã sinh viên) | **Không đưa** lên chuỗi hay IPFS trong bản demo |
 
 ### Smart Contract `CertificateRegistry`
 
-| Hàm / sự kiện | Quyền | Mô tả |
-|---|---|---|
-| `constructor()` | - | Người triển khai trở thành `admin` |
-| `issueCertificate(id, hash, cid)` | `onlyAdmin` | Ghi bản ghi mới. Từ chối ID rỗng, hash bằng 0, ID đã tồn tại |
-| `revokeCertificate(id)` | `onlyAdmin` | Đánh dấu `revoked = true`, không xóa bản ghi. Từ chối nếu không tồn tại hoặc đã thu hồi |
-| `verifyCertificate(id, hash)` | công khai (view) | `true` nếu tồn tại, chưa thu hồi và hash khớp |
-| `getCertificate(id)` | công khai (view) | Trả về hash, CID, issuer, issuedAt, revoked, exists |
-| Event `CertificateIssued`, `CertificateRevoked` | - | Phục vụ theo dõi và truy vết |
+Bảng
 
-## 3. Cấu trúc thư mục
+| Hàm / Sự kiện | Quyền | Mô tả |
+| --- | --- | --- |
+| `constructor()` | — | Người triển khai trở thành admin |
+| `issueCertificate(id, hash, cid)` | `onlyAdmin` | Ghi bản ghi mới; từ chối trống/đã tồn tại/hash rỗng |
+| `revokeCertificate(id)` | `onlyAdmin` | Đánh dấu thu hồi; không xóa dữ liệu |
+| `verifyCertificate(id, hash)` | Công khai | Kiểm tra hợp lệ: tồn tại + chưa thu hồi + khớp hash |
+| `getCertificate(id)` | Công khai | Trả về đầy đủ thông tin bản ghi |
+| `CertificateIssued`, `CertificateRevoked` | — | Sự kiện phục vụ theo dõi |
+
+---
+
+## 3. Công nghệ sử dụng
+
+Bảng
+
+| Thành phần | Mô tả |
+| --- | --- |
+| **Solidity ^0.8.28** | Ngôn ngữ viết hợp đồng thông minh |
+| **Hardhat** | Môi trường phát triển, biên dịch, triển khai, kiểm thử |
+| **Ethers.js** | Kết nối và ký giao dịch với blockchain |
+| **Node.js + Express** | Máy chủ web & API trung gian |
+| **Pinata (IPFS)** | Lưu trữ dữ liệu off-chain phân tán (tùy chọn) |
+| **qrcode** | Sinh mã QR |
+| **dotenv** | Quản lý biến môi trường & khóa bảo mật |
+
+---
+
+## 4. Cấu trúc thư mục
 
 ```
 blockchain-certificate/
-├── contracts/
-│   └── CertificateRegistry.sol     # Smart Contract
-├── scripts/
-│   ├── deploy.js                   # triển khai hợp đồng
-│   ├── create-hash.js              # tạo SHA-256
-│   ├── upload-ipfs.js              # upload JSON lên IPFS (Pinata)
-│   ├── issue.js                    # phát hành
-│   ├── revoke.js                   # thu hồi
-│   └── generate-qr.js              # tạo mã QR
-├── data/
-│   ├── certificate.json            # dữ liệu dùng cho upload IPFS và tạo QR
-│   └── certificates/               # dữ liệu từng chứng chỉ (CERT-2026-000x.json)
-├── public/index.html               # giao diện tra cứu
-├── server.js                       # máy chủ web + API xác minh
-├── hardhat.config.js               # cấu hình Hardhat (Solidity 0.8.28, mạng localhost)
+├── contracts/          # Smart Contract
+│   └── CertificateRegistry.sol
+├── scripts/             # Triển khai, phát hành, thu hồi, tạo hash, upload IPFS, tạo QR
+├── test/                # Bộ Unit Test (18 trường hợp: chức năng + bảo mật + đo gas)
+├── public/              # Giao diện web (4 tab: Xác minh / Phát hành / Thu hồi / Tạo QR)
+│   └── index.html
+├── data/                # Dữ liệu chứng chỉ off-chain
+│   ├── certificates/    # Từng chứng chỉ định dạng JSON
+│   ├── certificate.json  # Mẫu dữ liệu
+│   └── ipfs-cids.json    # Ánh xạ ID → CID IPFS
+├── server.js            # Backend API + máy chủ web
+├── hardhat.config.js    # Cấu hình mạng & biên dịch
 ├── package.json
-├── .gitignore
-└── .env                            # KHÔNG đưa lên Git (xem mục 4.2)
+├── .env.example         # Mẫu cấu hình môi trường
+└── .gitignore           # Loại trừ: node_modules, .env, file sinh ra khi chạy
 ```
 
-Các tệp được sinh ra khi chạy (đã nằm trong `.gitignore`): `deployed-address.json`, `ipfs-cid.json`, `artifacts/`, `cache/`.
+> 
+> Các file tự động tạo (đã bị loại trừ): `deployed-address.json`, `ipfs-cid.json`, `artifacts/`, `cache/`, `.env`
 
-## 4. Cài đặt và cấu hình
+---
 
-### 4.1. Yêu cầu
+## 5. Cài đặt & Cấu hình
 
+### Yêu cầu hệ thống
 - Node.js từ 18 trở lên (script upload IPFS dùng `fetch` có sẵn của Node)
 - npm
 - Tài khoản [Pinata](https://pinata.cloud) và một JWT API key (chỉ cần cho bước upload IPFS)
 
-### 4.2. Cài đặt
+### Bước cài đặt
 
-```bash
-git clone https://github.com/Slowwlly/blockchain-certificate.git
-cd blockchain-certificate
+```
+# 1. Clone dự án
+git clone https://github.com/Slowwlly/Xac-minh-van-bang-chung-chi-bang-blockchain.git
+cd Xac-minh-van-bang-chung-chi-bang-blockchain
+
+# 2. Cài thư viện
 npm install
+
+# 3. Cấu hình biến môi trường
+cp .env.example .env
+# → Mở .env và điền thông tin theo hướng dẫn bên dưới
+
+# 4. Biên dịch hợp đồng
 npx hardhat compile
 ```
 
-Tạo file `.env` ở thư mục gốc:
+### Cấu hình `.env`
 
-```env
-PINATA_JWT=<JWT cua Pinata>
-```
+Bảng
 
-> **Bảo mật:** `.env` đã nằm trong `.gitignore`. Không commit file này, không dán JWT vào báo cáo hay ảnh chụp màn hình. Nếu JWT từng bị lộ, hãy thu hồi và tạo khóa mới trên Pinata.
-
-## 5. Chạy thử (demo)
-
-Cần **ít nhất hai cửa sổ terminal** tại thư mục gốc của dự án. Ví dụ dưới đây dùng PowerShell (Windows); trên Linux/macOS, thay `$env:CERTIFICATE_ID="..."` bằng `CERTIFICATE_ID=...` đặt trước lệnh.
-
-**Terminal 1: khởi động mạng Blockchain cục bộ (giữ nguyên, không tắt)**
-
-```bash
-npx hardhat node
-```
-
-**Terminal 2: các bước còn lại**
-
-```powershell
-# 1. Triển khai hợp đồng (ghi địa chỉ vào deployed-address.json)
-npx hardhat run scripts/deploy.js --network localhost
-
-# 2. (Tùy chọn) Tạo hash để xem trước giá trị SHA-256
-node scripts/create-hash.js
-
-# 3. Upload dữ liệu chứng chỉ lên IPFS (đọc data/certificate.json, ghi ipfs-cid.json)
-node scripts/upload-ipfs.js
-
-# 4. Phát hành chứng chỉ lên chuỗi (đọc data/certificates/<id>.json và ipfs-cid.json)
-$env:CERTIFICATE_ID="CERT-2026-0002"
-npx hardhat run scripts/issue.js --network localhost
-
-# 5. Chạy website xác minh
-node server.js
-```
-
-Mở trình duyệt:
-
-- Trang chủ: <http://localhost:3000>
-- Xác minh trực tiếp: <http://localhost:3000/verify/CERT-2026-0002>
-- API: `GET http://localhost:3000/api/verify/CERT-2026-0002`
-
-**Thu hồi chứng chỉ và kiểm tra lại**
-
-```powershell
-$env:CERTIFICATE_ID="CERT-2026-0002"
-npx hardhat run scripts/revoke.js --network localhost
-```
-
-Tải lại trang xác minh: trạng thái chuyển sang `REVOKED`.
-
-**Tạo mã QR**
-
-```powershell
-node scripts/generate-qr.js
-```
-
-Ảnh QR được lưu ở thư mục gốc, tên dạng `CERT-2026-0002-QR.png`.
-
-> **Lưu ý khi tạo QR:** địa chỉ IP trong `scripts/generate-qr.js` hiện được gán cứng (`10.0.233.70`). Hãy sửa thành địa chỉ IPv4 của máy đang chạy `server.js` (server in địa chỉ LAN khi khởi động). Điện thoại phải cùng mạng LAN và tường lửa phải cho phép cổng 3000.
-
-> **Lưu ý khi tắt/mở lại `hardhat node`:** mạng cục bộ **mất toàn bộ dữ liệu** khi khởi động lại. Khi đó phải chạy lại bước 1 (deploy) và bước 4 (issue).
-
-### Các trạng thái API trả về
-
-| `status` | Ý nghĩa |
-|---|---|
-| `VALID` | Có bản ghi, hash khớp, chưa thu hồi |
-| `REVOKED` | Chứng chỉ đã bị thu hồi |
-| `HASH_MISMATCH` | Dữ liệu đối chiếu không khớp hash trên chuỗi |
-| `NOT_FOUND` | Không có bản ghi trên chuỗi |
-| `DATA_NOT_FOUND` / `DATA_ID_MISMATCH` | Thiếu hoặc sai file dữ liệu `data/certificates/<id>.json` |
-| `SYSTEM_NOT_READY` | Chưa deploy hợp đồng hoặc chưa biên dịch |
-| `ERROR` | Lỗi kết nối mạng Hardhat/hợp đồng |
-
-## 6. Kiểm thử
-
-Phát hành chứng chỉ thành công.
-Xác minh chứng chỉ hợp lệ.
-Thu hồi chứng chỉ thành công.
-Xác minh chứng chỉ sau thu hồi trả về REVOKED.
-
-## 7. Xử lý sự cố thường gặp
-
-| Hiện tượng | Nguyên nhân / cách xử lý |
-|---|---|
-| `Chua deploy Smart Contract` / `SYSTEM_NOT_READY` | Chưa chạy `npx hardhat compile` và `deploy.js`, hoặc đã khởi động lại node mà chưa deploy lại |
-| `Only admin` | Giao dịch không do tài khoản đã deploy gửi. Script mặc định dùng tài khoản đầu tiên của Hardhat |
-| `Already exists` | Mã chứng chỉ đã được phát hành, hãy dùng mã khác |
-| `DATA_NOT_FOUND` | Thiếu file `data/certificates/<id>.json` cho mã đang tra cứu |
-| `Khong tim thay PINATA_JWT` | Chưa tạo `.env` hoặc sai tên biến |
-| CID hiển thị rỗng | `issue.js` chỉ dùng CID nếu `ipfs-cid.json` khớp mã đang phát hành. Cần upload IPFS **trước** khi phát hành và đúng chứng chỉ |
-| QR không mở được trên điện thoại | IP trong QR là `localhost` hoặc sai; khác mạng LAN; tường lửa chặn cổng 3000 |
-
-## 8. Phần tự phát triển và phần tham khảo
-
-### Thư viện, công cụ và dịch vụ sử dụng (không phải sản phẩm của nhóm)
-
-| Thành phần | Mục đích |
-|---|---|
-| [Hardhat](https://hardhat.org) + `@nomicfoundation/hardhat-toolbox` | Biên dịch, triển khai, mạng Ethereum cục bộ |
-| [ethers.js](https://docs.ethers.org) | Tương tác với Smart Contract |
-| [Express](https://expressjs.com) | Máy chủ web và API |
-| [qrcode](https://www.npmjs.com/package/qrcode) | Sinh ảnh mã QR |
-| [dotenv](https://www.npmjs.com/package/dotenv) | Đọc biến môi trường |
-| [Pinata](https://docs.pinata.cloud) | Dịch vụ lưu trữ/pin dữ liệu IPFS |
-
-### Phần do nhóm tự phát triển
-
-- Smart Contract `contracts/CertificateRegistry.sol`
-- Các script trong `scripts/` (deploy, hash, IPFS, issue, revoke, QR)
-- Máy chủ và API xác minh `server.js`, giao diện `public/index.html`
-- Dữ liệu chứng chỉ giả lập trong `data/`
-- Báo cáo bài tập lớn
-
-## 9. Giới hạn và lưu ý bảo mật
-
-- Chỉ chạy trên mạng Hardhat cục bộ; chưa triển khai testnet/mainnet.
-- Tài khoản admin là tài khoản thử nghiệm mặc định của Hardhat. **Khóa riêng của các tài khoản này là công khai**, tuyệt đối không dùng cho mạng thật.
-- Mã băm hiện **chưa có salt** và dùng `JSON.stringify` nên phụ thuộc thứ tự trường. Với dữ liệu ít biến thể, có thể bị dò ngược; hướng khắc phục là thêm trường `nonce` ngẫu nhiên và chuẩn hóa dữ liệu trước khi băm.
-- Hash chỉ chứng minh dữ liệu không bị thay đổi so với lúc phát hành, không chứng minh nội dung gốc là đúng.
-- IPFS không mặc định bảo mật: ai biết CID đều có thể đọc nội dung. Không đưa dữ liệu cá nhân thật lên IPFS.
-- Website hiện đối chiếu hash với file dữ liệu nằm trên máy chủ, chưa cho người xác minh tự tải dữ liệu lên để tính hash, và chưa tải lại nội dung từ IPFS theo CID để đối chiếu.
-- Mã QR chỉ là đường dẫn, không tự chứng minh tính hợp lệ.
-- Phát hành và thu hồi hiện qua dòng lệnh, chưa có giao diện quản trị và chưa dùng ví (MetaMask).
-
-## 10. Giấy phép
-
-Chưa chọn giấy phép.
-=======
-# Hệ thống Xác minh Chứng chỉ Blockchain (Đề tài #17)
-
-Demo ứng dụng quản lý và xác minh văn bằng/chứng chỉ đại học bằng Blockchain (Ethereum + Hardhat + IPFS).
-
-## Chức năng
-
-| Chức năng | Mô tả | Quyền |
-|---|---|---|
-| **Phát hành chứng chỉ** | Nhập thông tin → tự tính SHA-256, upload IPFS (Pinata), ghi on-chain | Admin (cần mật khẩu) |
-| **Thu hồi chứng chỉ** | Đánh dấu thu hồi trên blockchain (không thể hoàn tác) | Admin (cần mật khẩu) |
-| **Tạo QR code** | Tạo QR trỏ tới trang xác minh, tải PNG về được | Công khai |
-| **Xác minh** | Kiểm tra hash + trạng thái on-chain, tra cứu công khai | Công khai |
-
-**Nguyên tắc**: On-chain **chỉ lưu hash + IPFS CID + issuer + thời gian + trạng thái** — không lưu dữ liệu cá nhân. Dữ liệu chi tiết lưu off-chain (file JSON + IPFS).
-
-## Công nghệ sử dụng
-
-- **Smart Contract**: Solidity ^0.8.28, Hardhat
-- **Backend**: Node.js + Express + ethers.js (ký giao dịch admin phía server)
-- **Frontend**: HTML/CSS/JS thuần (4 tab: Xác minh / Phát hành / Thu hồi / Tạo QR)
-- **Lưu trữ phân tán**: IPFS qua Pinata (tùy chọn)
-- **QR**: thư viện `qrcode`
-
-## Cài đặt
-
-```bash
-# 1. Cai dat thu vien
-npm install
-
-# 2. Cau hinh .env (xem muc ben duoi)
-cp .env.example .env   # hoac sua truc tiep .env
-
-# 3. Compile smart contract
-npx hardhat compile
-
-# 4. Chay node blockchain local (cua so 1)
-npx hardhat node
-
-# 5. Deploy contract (cua so 2)
-npx hardhat run scripts/deploy.js --network localhost
-
-# 6. Chay web server (cua so 2)
-node server.js
-
-# 7. Mo trinh duyet: http://localhost:3000
-```
-
-## Chạy Unit Test
-
-```bash
-npx hardhat test
-```
-Bao gồm 18 test case: chức năng phát hành/xác minh/thu hồi, kiểm thử bảo mật access control (chỉ admin được phép), và đo gas.
-
-## Cấu hình `.env`
-
-| Biến | Mô tả | Mặc định |
-|---|---|---|
-| `PINATA_JWT` | JWT của Pinata để upload IPFS (tùy chọn) | — |
-| `ADMIN_PRIVATE_KEY` | Private key tài khoản admin ký giao dịch | tài khoản #0 Hardhat |
+| Biến | Mô tả | Giá trị mặc định |
+| --- | --- | --- |
+| `PINATA_JWT` | Khóa xác thực Pinata | — (bỏ trống nếu không dùng IPFS) |
+| `ADMIN_PASSWORD` | Mật khẩu bảo vệ chức năng phát hành/thu hồi | `admin123` **(nên đổi ngay)** |
+| `ADMIN_PRIVATE_KEY` | Khóa riêng ký giao dịch | Tài khoản số #0 của Hardhat |
 | `RPC_URL` | Địa chỉ node blockchain | `http://127.0.0.1:8545` |
-| `ADMIN_PASSWORD` | Mật khẩu bảo vệ tab Phát hành / Thu hồi | `admin123` (nên đổi) |
-| `QR_BASE_URL` | URL cơ sở in trong QR (tùy chọn, mặc định tự phát hiện IP LAN) | — |
+| `QR_BASE_URL` | Tiền tố URL trong QR | Tự động phát hiện IP LAN |
 
-## Quét QR bằng điện thoại
+> 
+> 🔒 **Quan trọng:** Không bao giờ commit file `.env` lên GitHub — đã được bảo vệ trong `.gitignore`.
 
-1. Điện thoại và máy tính **cùng một WiFi**.
-2. Khi tạo QR, hệ thống tự dùng **IP LAN** của máy (xem cửa sổ `node server.js`, dòng "Website trên mạng LAN").
-3. Nếu vẫn không mở được: **cho phép Node.js qua Windows Firewall** (khi chạy `node server.js` lần đầu Windows sẽ hỏi, bấm "Cho phép truy cập" → tick cả "Mạng riêng" và "Mạng công khai").
-4. Hoặc điền thủ công IP LAN vào ô "URL cơ sở" trong tab Tạo QR.
+---
 
-## Cấu trúc thư mục
+## 6. Chạy Demo
+
+Cần **2 cửa sổ Terminal** tại thư mục gốc dự án:
+
+**Terminal 1 — Khởi động mạng Blockchain cục bộ**
 
 ```
-blockchain-certificate/
-├── contracts/           # Smart Contract (CertificateRegistry.sol)
-├── scripts/             # Scripts deploy / issue / revoke / generate-qr (dung duoc)
-├── test/                # Unit Test (18 test case)
-├── public/              # Giao dien web (index.html 4 tab)
-├── data/                # Du lieu chung chi off-chain (JSON) + IPFS CID map
-├── server.js            # Backend API + phuc vu web
-├── hardhat.config.js    # Cau hinh Hardhat
-└── .env                 # Cau hinh moi truong (khong commit len GitHub)
+npx hardhat node
+# → Giữ nguyên cửa sổ này, không đóng
 ```
 
-## Phần tự phát triển (so với source tham khảo)
+**Terminal 2 — Triển khai & Khởi động Web**
 
-- Giao diện web 4 tab (Xác minh / Phát hành / Thu hồi / Tạo QR) thay vì chỉ xác minh.
-- API server: `/api/issue`, `/api/revoke`, `/api/qr/:id`, `/api/status`, `/api/certificates`.
-- Tự động tính SHA-256, tự upload IPFS (Pinata), tự lưu file JSON off-chain.
-- Bảo mật: mật khẩu admin cho các thao tác ghi, QR tự động dùng IP LAN cho điện thoại.
-- Bộ 18 Unit Test (chức năng + bảo mật access control + đo gas).
+```
+# 1. Triển khai hợp đồng
+npx hardhat run scripts/deploy.js --network localhost
 
-## Hạn chế của bản demo (nâng cấp trong tương lai)
+# 2. Khởi động máy chủ web
+node server.js
+```
 
-- Ký giao dịch phía server dùng private key lưu ở `.env`; bản production nên dùng **MetaMask** ký phía client.
-- Chạy trên Hardhat local node; có thể chuyển sang testnet (Sepolia) bằng cách sửa `RPC_URL` và `ADMIN_PRIVATE_KEY`.
-- Dữ liệu off-chain lưu file JSON trên server; production nên dùng database hoặc hoàn toàn IPFS.
->>>>>>> 0b6c43d (Cập nhật hoàn chỉnh: giao diện quản trị, QR tự động IP, test bảo mật, tài liệu báo cáo)
-=======
-# Xac-minh-van-bang-chung-chi-bang-blockchain
->>>>>>> 906c4ab6cd04fde3d0c730cb15547db49dfee73c
+Mở trình duyệt truy cập:
+
+- 🏠 Trang chủ: `http://localhost:3000`
+- 📱 Trên điện thoại cùng WiFi: dùng **IP LAN** hiển thị ở dòng "Website trên mạng LAN"
+
+### Các thao tác chính
+
+Bảng
+
+| Hành động | Cách thực hiện |
+| --- | --- |
+| **Phát hành** | Tab Phát hành → điền thông tin + mật khẩu → Xác nhận |
+| **Tạo QR** | Tab Tạo QR → nhập mã → (tự chọn IP LAN nếu cần) → Tạo & Tải về |
+| **Xác minh** | Quét QR hoặc nhập mã → Hệ thống kiểm tra và hiển thị trạng thái |
+| **Thu hồi** | Tab Thu hồi → nhập mã + mật khẩu → Xác nhận (không hoàn tác được!) |
+
+### Chạy kiểm thử
+
+```
+npx hardhat test
+# → 18/18 test bao gồm: chức năng, bảo mật chỉ admin được phép, đo gas tiêu thụ
+```
+
+---
+
+## 7. Sửa lỗi thường gặp
+
+Bảng
+
+| Hiện tượng | Nguyên nhân / Cách khắc phục |
+| --- | --- |
+| ❌ Điện thoại quét QR không mở được | QR chứa `localhost` → hệ thống tự phát hiện IP LAN, hoặc điền thủ công IP vào ô "URL cơ sở"; cùng WiFi; mở cổng 3000 trên tường lửa |
+| ❌ `SYSTEM_NOT_READY` | Chưa chạy `npx hardhat compile` + `deploy.js`; hoặc đã khởi động lại node → triển khai lại |
+| ❌ `Only admin` | Tài khoản ký giao dịch không phải người triển khai; kiểm tra `ADMIN_PRIVATE_KEY` trong `.env` |
+| ❌ `Already exists` | Mã chứng chỉ đã được phát hành → dùng mã khác |
+| ❌ Mất dữ liệu sau khi tắt node | Mạng Hardhat cục bộ không lưu trữ vĩnh viễn → khởi động lại node thì phải `deploy` + phát hành lại |
+| ❌ Không upload IPFS được | Kiểm tra `PINATA_JWT` còn hợp lệ; xem hướng dẫn tại [Pinata Docs](https://docs.pinata.cloud) |
+
+---
+
+## 8. Phát triển & Đóng góp
+
+### So sánh với phiên bản tham khảo ban đầu
+
+Bảng
+
+| Phần | Nội dung tự phát triển |
+| --- | --- |
+| Giao diện | Thay vì chỉ trang xác minh → xây dựng **4 tab hoàn chỉnh** (Phát hành / Thu hồi / Tạo QR / Xác minh) |
+| API Server | Xây dựng các endpoint mới: `/api/issue`, `/api/revoke`, `/api/qr/:id`, `/api/status`... |
+| Tích hợp tự động | Tính hash, upload IPFS, tạo file JSON đều tự động trên giao diện — không cần gõ lệnh |
+| Bảo mật | Thêm lớp xác thực bằng mật khẩu cho chức năng ghi dữ liệu; tách quyền admin/công chúng |
+| QR cải tiến | Tự phát hiện IP LAN, hiển thị danh sách IP có sẵn → chọn một cú nhấp là dùng được |
+| Kiểm thử | Xây dựng bộ **18 Unit Test** bao gồm kiểm soát quyền truy cập, chức năng, đo gas |
+| Tài liệu | Hoàn thiện README, hướng dẫn cài đặt, xử lý lỗi, báo cáo đề tài |
+
+### Hướng phát triển trong tương lai
+
+- 🔐 Ký giao dịch phía trình duyệt qua **MetaMask** → không còn lưu khóa riêng trên server
+- 🌐 Triển khai lên **testnet Sepolia** thay vì chỉ chạy cục bộ
+- 💾 Lưu dữ liệu off-chain hoàn toàn trên IPFS, không phụ thuộc file JSON trên server
+- 📊 Thêm thống kê, tìm kiếm nâng cao, phân trang
+- ✅ Thêm salt ngẫu nhiên khi băm để tăng bảo mật
+
+---
+
+## 9. Giấy phép
+
+Dự án phục vụ mục đích học tập.
