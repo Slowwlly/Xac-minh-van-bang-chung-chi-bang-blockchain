@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Xác minh văn bằng/chứng chỉ đại học bằng Blockchain
 
 Nguyên mẫu (prototype) xác minh văn bằng/chứng chỉ bằng Smart Contract trên mạng Blockchain cục bộ (Hardhat).
@@ -232,3 +233,103 @@ Xác minh chứng chỉ sau thu hồi trả về REVOKED.
 ## 10. Giấy phép
 
 Chưa chọn giấy phép.
+=======
+# Hệ thống Xác minh Chứng chỉ Blockchain (Đề tài #17)
+
+Demo ứng dụng quản lý và xác minh văn bằng/chứng chỉ đại học bằng Blockchain (Ethereum + Hardhat + IPFS).
+
+## Chức năng
+
+| Chức năng | Mô tả | Quyền |
+|---|---|---|
+| **Phát hành chứng chỉ** | Nhập thông tin → tự tính SHA-256, upload IPFS (Pinata), ghi on-chain | Admin (cần mật khẩu) |
+| **Thu hồi chứng chỉ** | Đánh dấu thu hồi trên blockchain (không thể hoàn tác) | Admin (cần mật khẩu) |
+| **Tạo QR code** | Tạo QR trỏ tới trang xác minh, tải PNG về được | Công khai |
+| **Xác minh** | Kiểm tra hash + trạng thái on-chain, tra cứu công khai | Công khai |
+
+**Nguyên tắc**: On-chain **chỉ lưu hash + IPFS CID + issuer + thời gian + trạng thái** — không lưu dữ liệu cá nhân. Dữ liệu chi tiết lưu off-chain (file JSON + IPFS).
+
+## Công nghệ sử dụng
+
+- **Smart Contract**: Solidity ^0.8.28, Hardhat
+- **Backend**: Node.js + Express + ethers.js (ký giao dịch admin phía server)
+- **Frontend**: HTML/CSS/JS thuần (4 tab: Xác minh / Phát hành / Thu hồi / Tạo QR)
+- **Lưu trữ phân tán**: IPFS qua Pinata (tùy chọn)
+- **QR**: thư viện `qrcode`
+
+## Cài đặt
+
+```bash
+# 1. Cai dat thu vien
+npm install
+
+# 2. Cau hinh .env (xem muc ben duoi)
+cp .env.example .env   # hoac sua truc tiep .env
+
+# 3. Compile smart contract
+npx hardhat compile
+
+# 4. Chay node blockchain local (cua so 1)
+npx hardhat node
+
+# 5. Deploy contract (cua so 2)
+npx hardhat run scripts/deploy.js --network localhost
+
+# 6. Chay web server (cua so 2)
+node server.js
+
+# 7. Mo trinh duyet: http://localhost:3000
+```
+
+## Chạy Unit Test
+
+```bash
+npx hardhat test
+```
+Bao gồm 18 test case: chức năng phát hành/xác minh/thu hồi, kiểm thử bảo mật access control (chỉ admin được phép), và đo gas.
+
+## Cấu hình `.env`
+
+| Biến | Mô tả | Mặc định |
+|---|---|---|
+| `PINATA_JWT` | JWT của Pinata để upload IPFS (tùy chọn) | — |
+| `ADMIN_PRIVATE_KEY` | Private key tài khoản admin ký giao dịch | tài khoản #0 Hardhat |
+| `RPC_URL` | Địa chỉ node blockchain | `http://127.0.0.1:8545` |
+| `ADMIN_PASSWORD` | Mật khẩu bảo vệ tab Phát hành / Thu hồi | `admin123` (nên đổi) |
+| `QR_BASE_URL` | URL cơ sở in trong QR (tùy chọn, mặc định tự phát hiện IP LAN) | — |
+
+## Quét QR bằng điện thoại
+
+1. Điện thoại và máy tính **cùng một WiFi**.
+2. Khi tạo QR, hệ thống tự dùng **IP LAN** của máy (xem cửa sổ `node server.js`, dòng "Website trên mạng LAN").
+3. Nếu vẫn không mở được: **cho phép Node.js qua Windows Firewall** (khi chạy `node server.js` lần đầu Windows sẽ hỏi, bấm "Cho phép truy cập" → tick cả "Mạng riêng" và "Mạng công khai").
+4. Hoặc điền thủ công IP LAN vào ô "URL cơ sở" trong tab Tạo QR.
+
+## Cấu trúc thư mục
+
+```
+blockchain-certificate/
+├── contracts/           # Smart Contract (CertificateRegistry.sol)
+├── scripts/             # Scripts deploy / issue / revoke / generate-qr (dung duoc)
+├── test/                # Unit Test (18 test case)
+├── public/              # Giao dien web (index.html 4 tab)
+├── data/                # Du lieu chung chi off-chain (JSON) + IPFS CID map
+├── server.js            # Backend API + phuc vu web
+├── hardhat.config.js    # Cau hinh Hardhat
+└── .env                 # Cau hinh moi truong (khong commit len GitHub)
+```
+
+## Phần tự phát triển (so với source tham khảo)
+
+- Giao diện web 4 tab (Xác minh / Phát hành / Thu hồi / Tạo QR) thay vì chỉ xác minh.
+- API server: `/api/issue`, `/api/revoke`, `/api/qr/:id`, `/api/status`, `/api/certificates`.
+- Tự động tính SHA-256, tự upload IPFS (Pinata), tự lưu file JSON off-chain.
+- Bảo mật: mật khẩu admin cho các thao tác ghi, QR tự động dùng IP LAN cho điện thoại.
+- Bộ 18 Unit Test (chức năng + bảo mật access control + đo gas).
+
+## Hạn chế của bản demo (nâng cấp trong tương lai)
+
+- Ký giao dịch phía server dùng private key lưu ở `.env`; bản production nên dùng **MetaMask** ký phía client.
+- Chạy trên Hardhat local node; có thể chuyển sang testnet (Sepolia) bằng cách sửa `RPC_URL` và `ADMIN_PRIVATE_KEY`.
+- Dữ liệu off-chain lưu file JSON trên server; production nên dùng database hoặc hoàn toàn IPFS.
+>>>>>>> 0b6c43d (Cập nhật hoàn chỉnh: giao diện quản trị, QR tự động IP, test bảo mật, tài liệu báo cáo)
